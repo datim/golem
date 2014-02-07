@@ -4,7 +4,7 @@
 #    better exception handling
 
 import os
-import cPickle
+import pickle
 import logging
 import time
 from bs4 import BeautifulSoup
@@ -73,14 +73,15 @@ class FalconsScheduleScraper(object):
 		import pdb
 		pdb.set_trace()
 
+		# archive new games to pickle file
+		fh = open(self.archive_file, 'w')
+		pickle.dump(new_games, fh)
+		#fh.write(pickled_schedule)
+		fh.close()
+
 		# if we've found new games, combine them, report the new games and 
 		# archive the current list
 		if new_games:
-
-			# archive new games to pickle file
-			fh = open(self.archive_file, 'w')
-			cPickle.dump(found_games, fh)
-			fh.close()
 
 			self._report_new_games(new_games)
 
