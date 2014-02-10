@@ -4,7 +4,7 @@
 #    better exception handling
 
 import os
-import pickle
+import cPickle as pickle
 import logging
 import time
 from bs4 import BeautifulSoup
@@ -20,10 +20,7 @@ class FalconsScheduleScraper(object):
 
 		# FIXME move to config file
 		self._schedule_site = "http://siliconvalleysoccer.com/league/Coed_Spring_PA_2014/schedule.php"
-		self._recipients_to_list = ['jroecks@gmail.com']
-		self._recipients_cc_list = []
-		self._recipients_bcc_list = []
-		self.archive_file = "falcons_games.pickle"
+		self.archive_file = "reported_games_falcons.pickle"
 		self.recipients_file = "./recipients.txt"
 		self._email_account_file = "./account.txt"
 
@@ -48,42 +45,36 @@ class FalconsScheduleScraper(object):
 			3b. email changes to falconsmanager
 		"""
 
-		current_games = None
-		new_games = {}
+		reported_games = {}
+		unreported_games = {}
 
 		# scrape the schedule for games. This part is VERY website dependent
-		found_games = self._scrapeSSVSchedule()
+		discovered_games = self._scrapeSSVSchedule()
 
-		# retrieve list of games
+		# retrieve list of games we've already reported
 		if os.path.exists(self.archive_file):
-			fh = open(self.archive_file, 'r')
-			current_games = cPickle.load(fh)
+			fh = open(self.archive_file, 'rb')
+			reported_games = pickle.load(fh)
 			fh.close()
 
-		if current_games:
+		if reported_games:
 			# we've already reported some games, check for new games
-			for game in found_games:
-				if game not in current_games:
-					new_games[game] = found_games[game]
+			for game in discovered_games:
+				if game not in reported_games:
+					unreported_games[game] = discovered_games[game]
 
 		else:
-			# no games have been reported so far.  Report all games
-			new_games = found_games
+			# we've never reported any games. Report all games
+			unreported_games = discovered_games
 
-		import pdb
-		pdb.set_trace()
-
-		# archive new games to pickle file
-		fh = open(self.archive_file, 'w')
-		pickle.dump(new_games, fh)
-		#fh.write(pickled_schedule)
+		# now that we've picked out all of the games that we want to report
+		# save all the games we discovered for the next time we check
+		fh = open(self.archive_file, 'wb')
+		pickle.dump(discovered_games, fh)
 		fh.close()
 
-		# if we've found new games, combine them, report the new games and 
-		# archive the current list
-		if new_games:
-
-			self._report_new_games(new_games)
+		# email list of new games that have been found
+		self._report_new_games(unreported_games)
 
 	def _scrapeSSVSchedule(self):
 		"""
@@ -124,15 +115,16 @@ class FalconsScheduleScraper(object):
 			
 				
 				if homeTeam == our_team or awayTeam == our_team:
-					# we have a match save the game, keyed by game time
+					# we have a match save the game, keyed by game time. Convert all
+					# clases to strings
 					game = {}
-					game['date'] = game_date
-					game['field'] = field
-					game['time'] = time
-					game['home'] = homeTeam
-					game['away'] = awayTeam
+					game['date'] = str(game_date)
+					game['field'] = str(field)
+					game['time'] = str(time)
+					game['home'] = str(homeTeam)
+					game['away'] = str(awayTeam)
 			
-					all_games[game_date] = game
+					all_games[str(game_date)] = game
 	
 		# return all games that were discovered
 		return all_games
@@ -140,7 +132,14 @@ class FalconsScheduleScraper(object):
 	def _report_new_games(self, new_games):
 		"""
 		Report new falcons games to recipients
+
+		Args:
+			new_games: Dictionary of games to report
 		"""
+
+		if not new_games:
+			print "No games to report"
+			return
 
 		# get recipients
 		to_list, cc_list, bcc_list = self._get_recipients()
@@ -198,7 +197,7 @@ class FalconsScheduleScraper(object):
 
 	def _get_recipients(self):
 		"""
-		read recipients from file. File format is one list per line:
+		read recipients from file. File format is (one entry per line):
 			[to]
 			[cc]
 			[bcc]
@@ -219,15 +218,15 @@ class FalconsScheduleScraper(object):
 					print "Malformed recipient list!"
 					raise
 
-				# save recipients
+				# save recipients, which are recorded as a list
 				to_list = eval(recp_info[0])
 				cc_list = eval(recp_info[1])
 				bcc_list = eval(recp_info[2])
 
 				recp_file.close()
 
-			except:
-				print "Unable to process recipient file %s" % self.recipients_file
+			except Exception, e:
+				print "Unable to process recipient file %s. Exception %s" % (self.recipients_file, e)
 				raise
 
 		return to_list, cc_list, bcc_list
@@ -249,11 +248,15 @@ class FalconsScheduleScraper(object):
 			message += "\n Home Team:  %s, Away Team: %s" % (new_games[key]['home'], new_games[key]['away'])
 			message += "\n\n\n"
 
-		message += "This message was generated on %s at %s.\n" % (time.strftime("%d/%m/%Y"), time.strftime("%H:%M:%S"))
+		message += "This message was generated on %s at %s.\n" % (time.strftime("%m/%d/%Y"), time.strftime("%H:%M:%S"))
 		message += "If you would like to be removed from this list, please send a message to Jeff Roecks at jroecks@gmail.com"
 
 		return message
 def main():
+	"""
+	main method. Call Falcons scraper
+	"""
+
 	# create the scraper
 	scraper = FalconsScheduleScraper()
 	scraper.start()
