@@ -1,6 +1,6 @@
 #!/usr/bin/python
+# simple program to scrape soccer schedules for new falcons games. HIGHLY data dependent.
 # FIXME: 
-#    logging
 #    better exception handling
 
 import os
@@ -25,16 +25,18 @@ class FalconsScheduleScraper(object):
 		self._email_account_file = "./account.txt"
 
 		self._email = EmailerRoutine()
-
-		# initialize logging
-		# FIXME LOG
+		self._sleep_seconds = 60 * 60 # one hour
 
 	def start(self):
 		"""
 		Sleep for an hour, the initiate scraping of schedule website
 		"""
 
-		self.reportSchedule()
+		# report schedule, them sleep for an expected number of hours
+		while True:
+			self.reportSchedule()
+			logging.info("Sleeping %d seconds before next check" % self._sleep_seconds)
+			time.sleep(self._sleep_seconds)
 
 	def reportSchedule(self):
 		"""
@@ -48,6 +50,7 @@ class FalconsScheduleScraper(object):
 		reported_games = {}
 		unreported_games = {}
 
+		logging.info("Scraping...")
 		# scrape the schedule for games. This part is VERY website dependent
 		discovered_games = self._scrapeSSVSchedule()
 
@@ -62,6 +65,7 @@ class FalconsScheduleScraper(object):
 			for game in discovered_games:
 				if game not in reported_games:
 					unreported_games[game] = discovered_games[game]
+					logging.info("Discovered new game %s : %s" % (game, discovered_games[game]))
 
 		else:
 			# we've never reported any games. Report all games
@@ -74,7 +78,14 @@ class FalconsScheduleScraper(object):
 		fh.close()
 
 		# email list of new games that have been found
-		self._report_new_games(unreported_games)
+		if unreported_games:
+			# log new games
+			logging.info("Reporting new games:")
+			for game in unreported_games:
+				logging.info(" %s : %s" % (game, unreported_games[game]))
+
+			# email new games
+			self._report_new_games(unreported_games)
 
 	def _scrapeSSVSchedule(self):
 		"""
@@ -135,11 +146,10 @@ class FalconsScheduleScraper(object):
 
 		Args:
 			new_games: Dictionary of games to report
-		"""
 
-		if not new_games:
-			print "No games to report"
-			return
+		Returns:
+			N.A.
+		"""
 
 		# get recipients
 		to_list, cc_list, bcc_list = self._get_recipients()
@@ -177,8 +187,8 @@ class FalconsScheduleScraper(object):
 
 				# make sure we have the proper number of lines
 				if len(account_info) != 3:
-					print "We don't have the right number of lines in email account info.\
-						   Found %d, expected 3" % len(account_info)
+					logging.error("We don't have the right number of lines in email account info.\
+						   Found %d, expected 3" % len(account_info))
 					raise
 
 				# save the account info
@@ -189,7 +199,7 @@ class FalconsScheduleScraper(object):
 				account_file.close()
 
 			except:
-				print "Unable to open account file %s" % self._email_account_file
+				logging.error("Unable to open account file %s" % self._email_account_file)
 				raise
 	
 		# return account information
@@ -201,6 +211,9 @@ class FalconsScheduleScraper(object):
 			[to]
 			[cc]
 			[bcc]
+
+		Returns:
+			Recipient to, cc, and bcc lists
 		"""
 
 		to_list = []
@@ -215,7 +228,7 @@ class FalconsScheduleScraper(object):
 
 				# make sure we have the appropriate number of elements
 				if len(recp_info) != 3:
-					print "Malformed recipient list!"
+					logging.error("Malformed recipient list!")
 					raise
 
 				# save recipients, which are recorded as a list
@@ -226,7 +239,7 @@ class FalconsScheduleScraper(object):
 				recp_file.close()
 
 			except Exception, e:
-				print "Unable to process recipient file %s. Exception %s" % (self.recipients_file, e)
+				logging.error("Unable to process recipient file %s. Exception %s" % (self.recipients_file, e))
 				raise
 
 		return to_list, cc_list, bcc_list
@@ -237,6 +250,9 @@ class FalconsScheduleScraper(object):
 		
 		Args:
 			new_games: list of new games available
+
+		Returns;
+			Constructed email
 		"""
 
 		message = " *** This is an automated message *** \n\n The following Falcons Games have been posted in the past hour on %s\n" % self._schedule_site
@@ -245,17 +261,24 @@ class FalconsScheduleScraper(object):
 			message += "\n Day:   %s" % new_games[key]['date']
 			message += "\n Time:  %s" % new_games[key]['time']
 			message += "\n Field:  %s" % new_games[key]['field']
-			message += "\n Home Team:  %s, Away Team: %s" % (new_games[key]['home'], new_games[key]['away'])
+			message += "\n Home Team: %s" % new_games[key]['home'] 
+			message += "\n Away Team: %s" % new_games[key]['away']
 			message += "\n\n\n"
 
+		# message footer 
 		message += "This message was generated on %s at %s.\n" % (time.strftime("%m/%d/%Y"), time.strftime("%H:%M:%S"))
-		message += "If you would like to be removed from this list, please send a message to Jeff Roecks at jroecks@gmail.com"
+		message += "If you would like to be removed from these messages, please send a message to Jeff Roecks at jroecks@gmail.com"
 
 		return message
+	
 def main():
 	"""
 	main method. Call Falcons scraper
 	"""
+
+	# setup logging
+	logging.basicConfig(filename='./scraper.log', level=logging.INFO, \
+                        format='%(asctime)s %(levelname)-8s %(message)s', datefmt='%a, %d %b %Y %H:%M:%S')
 
 	# create the scraper
 	scraper = FalconsScheduleScraper()

@@ -1,10 +1,17 @@
 #!/usr/bin/python
+# class that can send emails.
 import smtplib
+import copy
+import logging
 from email.mime.text import MIMEText
 
 class EmailerRoutine(object):
+	"""
+	Wrap ability to send emails to recipients in a class
+	"""
 
 	def __init__(self):
+		""" constructor """
 		pass
 
 	def email(self, service_provider, user, password, to, cc, bcc, subject, message):
@@ -15,7 +22,14 @@ class EmailerRoutine(object):
 			service_provider: string specifying service provider
 			user: user account
 			password: password for user account
-			to: list of 
+			to: list of recipients
+			cc: list of recipients
+			bcc: list of recipients
+			subject: email subject
+			message: email content
+
+		Returns:
+			N.A.
 		"""
 
 		server = None
@@ -40,6 +54,16 @@ class EmailerRoutine(object):
 		return success
 
 	def _setup_gmail_provider(self, username, password):
+		"""
+		Create a connection to an gmail service provider"
+	
+		Args:
+			Username: gmail user name
+			password: gmail password
+
+		Returns:
+			Configured server object
+		"""
 
 		server = smtplib.SMTP('smtp.gmail.com:587')
 		server.starttls()  
@@ -51,6 +75,18 @@ class EmailerRoutine(object):
 	def _send_email(self, server, user, to_list, cc_list, bcc_list, subject, message):
 		"""
 		Send an email message
+
+		Args:
+			server: initialized email server obj
+			user: sender email
+			to_list: recipient list
+			cc_list: recipient list
+			bcc_list: recipient list
+			subject: email subject
+			message: email message
+
+		Returns:
+			N.A.
 		"""
 		msg = MIMEText(message)
 
@@ -60,20 +96,23 @@ class EmailerRoutine(object):
 		msg['From'] = user
 		msg['Subject'] = subject
 
-		server.sendmail(user, to_list, msg.as_string())
-		
+		logging.info("Emailing to: %s, cc: %s, bcc: %s" % (to_list, cc_list, bcc_list))
 
-		# construct the message header
-		#headers = ["from: " + user,
-        #   "subject: " + subject,
-        #   "to: " + '. '.join(to_list)]
+		all_recipients_list = copy.copy(to_list)
+		all_recipients_list.extend(cc_list)
+		all_recipients_list.extend(bcc_list)
 
-		#headers = "\r\n".join(headers)
-
-		#server.sendmail(user, to, headers + "\n" + message)  
+		server.sendmail(user, all_recipients_list, msg.as_string())
 
 	def _stop_server(self, server):
 		""" 
 		stop the server
+	
+		Args:
+			Server object to stop
+
+		Returns:
+			N.A.
 		"""
+
 		server.quit()
